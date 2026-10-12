@@ -68,6 +68,12 @@ https://dashboard.render.com/blueprint/new?repo=https://github.com/cpdd-1314/十
 
 ## 二、推送到 GitHub
 
+先在 GitHub 上建一个**空仓库**（不要勾选 Add README / .gitignore / license）：
+
+👉 https://github.com/new — 仓库名填 `十一愿俱乐部`，可见性按需选择。
+
+然后本地推送：
+
 ```bash
 cd 十一愿俱乐部
 git init
@@ -79,6 +85,10 @@ git remote add origin https://github.com/<你的账号>/十一愿俱乐部.git
 git branch -M main
 git push -u origin main
 ```
+
+> 如果服务名不是 `xixi-club`，建议同时在
+> **Settings → Secrets and variables → Actions → Variables** 里新建变量 `SERVICE_URL`，
+> 值为完整的 Render 地址（`https://xxx.onrender.com`）。这是给保活工作流用的，见第六节。
 
 ---
 
@@ -158,7 +168,11 @@ docker run -d --name xixi-pg -p 5432:5432 \
 1. **提前升级数据库**：Render 付费 Postgres 最低约 $6/月，无 30 天限制。这是唯一能长期稳定保存数据的办法。
 2. **定期备份**：页面底部「下载数据备份」导出 JSON，保存到本地或网盘。哪怕数据库被删也能一键恢复。
 3. **换永久免费的数据库**：把 `DATABASE_URL` 指向 Neon / Supabase 的免费 Postgres（Neon 免费档永久有效，不用换代码，改环境变量即可），Render 只负责跑服务。
-4. **防休眠**：用 cron-job.org / UptimeRobot 每隔 10 分钟访问一次 `/healthz`，可大幅减少冷启动（但每月 750 小时额度要留意）。
+4. **防休眠（仓库已内置）**：`.github/workflows/keepalive.yml` 每 10 分钟访问一次 `/healthz`，
+   让免费实例保持清醒，避免每次打开都要等 30～60 秒冷启动。
+   仓库建好后到 **Actions** 页签点一次 **Run workflow** 手动跑通即可，之后会自动定时执行。
+   单服务常驻约消耗 730 实例小时/月，落在免费额度 750 小时以内。
+   如果不想用，直接删掉这个文件就行。
 
 > 建议：正式用来记账的话，直接上付费 Postgres（约 $6/月），并把「下载数据备份」养成每周点一次的习惯。
 
@@ -207,6 +221,8 @@ sync_meta(id, revision, updated_at)   -- 实时同步版本号
 ├── package.json
 ├── render.yaml            # Render Blueprint（Web Service + Postgres）
 ├── .env.example
+├── .github/workflows/
+│   └── keepalive.yml      # 每 10 分钟唤醒一次，规避免费实例休眠
 ├── server/
 │   ├── index.js           # API + SSE + 静态文件服务
 │   ├── db.js              # 连接池、建表、版本号
