@@ -1,0 +1,25 @@
+{
+  "name": "xixi-club-payroll",
+  "version": "1.0.0",
+  "private": true,
+  "description": "十一愿俱乐部 · 批量结单与工资结算系统（网站版）",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "keywords": [
+    "club",
+    "payroll",
+    "render",
+    "postgres"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  }
+}

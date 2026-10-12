@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#7651a8" />
+<title>十一愿俱乐部 · 批量结单与工资结算</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237651a8'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%23fff' font-family='sans-serif'%3E%E6%84%BF%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<!-- ============ 登录 ============ -->
+<div id="login-view" class="login-view" hidden>
+  <form class="login-card" id="login-form">
+    <div class="login-logo">愿</div>
+    <h1 class="login-title">十一愿俱乐部</h1>
+    <p class="login-sub">批量结单 · 陪陪分配 · 工资结算</p>
+
+    <label class="field-label" for="login-code">访问口令</label>
+    <input id="login-code" class="text-input" type="password" autocomplete="current-password" placeholder="请输入团队访问口令" />
+    <div id="login-error" class="login-error" hidden></div>
+
+    <button class="primary-btn" type="submit" id="login-submit">进入系统</button>
+    <p class="login-hint">口令由管理员在 Render 环境变量 <code>ACCESS_CODE</code> 中设置。</p>
+  </form>
+</div>
+
+<!-- ============ 主应用 ============ -->
+<div id="app-view" hidden>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark">愿</span>
+        <span class="brand-text">十一愿俱乐部</span>
+      </div>
+      <div class="topbar-right">
+        <span class="sync-dot" id="sync-dot" title="同步状态"></span>
+        <span class="sync-text" id="sync-text">连接中…</span>
+        <button class="ghost-btn" id="btn-logout" type="button">退出</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <div class="hero">
+      <h1 class="hero-title">批量结单 · 陪陪分配 · 工资结算</h1>
+      <p class="hero-sub">数据存在云端，多人多设备实时同步。粘贴小票即可自动识别并计入工资。</p>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="orders" type="button">批量结单</button>
+      <button class="tab" data-tab="staff" type="button">员工管理</button>
+      <button class="tab" data-tab="payroll" type="button">工资统计</button>
+    </nav>
+
+    <!-- ---------------- 批量结单 ---------------- -->
+    <section class="panel active" data-panel="orders">
+
+      <div class="card">
+        <h2 class="section-title">批量粘贴小票</h2>
+        <p class="hint">复制一张或多张小票的文字粘贴到下面，请保留「老板、陪陪、项目、礼物、金额、数量、总额、场控、日期」等字段。可一次粘贴多张。</p>
+
+        <textarea id="batch-text" class="batch-input" placeholder="在这里粘贴小票文字……&#10;&#10;💫 老板：小明&#10;🪐 陪陪：冷屿、阿青&#10;项目：王者荣耀&#10;金额：30&#10;数量：2&#10;总额：60&#10;场控：小昔&#10;日期：2026/10/12"></textarea>
+
+        <div class="btn-row">
+          <button class="primary-btn" id="btn-parse" type="button">识别小票</button>
+          <button class="ghost-btn lg" id="btn-clear-preview" type="button">清空</button>
+        </div>
+      </div>
+
+      <div id="preview-message" class="message-card" hidden></div>
+      <div id="preview-list"></div>
+
+      <button class="primary-btn block" id="btn-save-orders" type="button" hidden>确认并保存有效订单</button>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 class="section-title">已保存订单 <span class="pill" id="orders-count">0</span></h2>
+          <div class="head-tools">
+            <input id="orders-filter" class="mini-input" type="month" />
+            <button class="ghost-btn" id="btn-filter-clear" type="button">全部</button>
+          </div>
+        </div>
+
+        <div id="orders-list" class="list"></div>
+      </div>
+    </section>
+
+    <!-- ---------------- 员工管理 ---------------- -->
+    <section class="panel" data-panel="staff">
+      <div class="card">
+        <h2 class="section-title">添加员工</h2>
+
+        <div class="grid-2">
+          <div>
+            <label class="field-label" for="staff-name">员工姓名</label>
+            <input id="staff-name" class="text-input" placeholder="例如：冷屿" />
+          </div>
+          <div>
+            <label class="field-label" for="staff-rate">提成比例（%）</label>
+            <input id="staff-rate" class="text-input" type="number" min="0" max="100" step="0.1" value="30" />
+          </div>
+          <div>
+            <label class="field-label" for="staff-allowance">每月补贴（元）</label>
+            <input id="staff-allowance" class="text-input" type="number" min="0" step="0.01" value="0" />
+          </div>
+          <div>
+            <label class="field-label" for="staff-deduction">每月扣款（元）</label>
+            <input id="staff-deduction" class="text-input" type="number" min="0" step="0.01" value="0" />
+          </div>
+        </div>
+
+        <button class="primary-btn" id="btn-add-staff" type="button">添加员工</button>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">员工名单 <span class="pill" id="staff-count">0</span></h2>
+        <p class="hint">补贴与扣款每人每月最多各计一次，且仅当该员工当月有订单时才生效。</p>
+        <div id="staff-list" class="list"></div>
+      </div>
+    </section>
+
+    <!-- ---------------- 工资统计 ---------------- -->
+    <section class="panel" data-panel="payroll">
+      <div class="card">
+        <div class="card-head">
+          <h2 class="section-title">月度工资结算</h2>
+          <div class="head-tools">
+            <input id="payroll-month" class="mini-input" type="month" />
+            <button class="ghost-btn" id="btn-export-csv" type="button">导出 CSV</button>
+          </div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-cell">
+            <div class="summary-label">订单总额</div>
+            <div class="summary-value" id="sum-order">¥0.00</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">陪陪分配总额</div>
+            <div class="summary-value" id="sum-allocation">¥0.00</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">提成合计</div>
+            <div class="summary-value" id="sum-commission">¥0.00</div>
+          </div>
+          <div class="summary-cell highlight-cell">
+            <div class="summary-label">应发工资合计</div>
+            <div class="summary-value highlight" id="sum-payable">¥0.00</div>
+          </div>
+        </div>
+
+        <p class="hint">工资 ＝ 个人分配金额 × 提成比例 ＋ 补贴 − 扣款。分配金额为订单总额在陪陪之间平均分配的结果。</p>
+      </div>
+
+      <div class="card" id="payroll-card">
+        <h2 class="section-title">员工明细</h2>
+        <div id="payroll-list" class="list"></div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="footer-line">保存前请核对小票的日期、金额和陪陪名单。</div>
+      <div class="footer-line">
+        <button class="link-btn" id="btn-backup" type="button">下载数据备份</button>
+        <span class="sep">·</span>
+        <button class="link-btn" id="btn-restore" type="button">从备份恢复</button>
+        <input id="restore-file" type="file" accept="application/json,.json" hidden />
+      </div>
+      <div class="footer-line muted" id="build-note">数据由 Render Postgres 持久化，多设备实时同步。</div>
+    </footer>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
