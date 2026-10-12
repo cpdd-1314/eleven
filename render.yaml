@@ -1,6 +1,17 @@
-# Render Blueprint —— 一键部署「十一愿俱乐部」网站版
-# 用法：Render Dashboard → New → Blueprint → 选择本仓库 → Apply
-# 会自动创建：1 个 Node Web Service + 1 个 PostgreSQL 数据库，并自动注入 DATABASE_URL
+# Render Blueprint —— 部署「十一愿俱乐部」网站版
+# 用法：Render Dashboard → New → Blueprint → 选择本仓库 → 填参数 → Apply
+#
+# ⚠️ 这里刻意「不创建」数据库，原因：
+#    Render 免费套餐每个 workspace 只允许 1 个免费 PostgreSQL。
+#    如果你的账号里已经有一个（比如别的项目在用），Blueprint 会因为
+#    超限而整体失败，Web Service 也会被连带取消。
+#    所以改成由你提供 DATABASE_URL，来源可以是：
+#      1) 新建的 Render 付费 Postgres（推荐，无 30 天限制）
+#      2) Neon / Supabase 等外部免费 Postgres（免费永久，推荐）
+#      3) 账号里已有的那个免费 Render Postgres
+#
+# 想改回「由 Blueprint 创建数据库」，把下面 databases: 段取消注释，
+# 并把 DATABASE_URL 换成 fromDatabase 写法即可（前提是没有其他免费库）。
 
 services:
   - type: web
@@ -18,20 +29,21 @@ services:
         value: production
       - key: NODE_VERSION
         value: "22"
+      # PostgreSQL 连接串：在下面三个来源中选一个，Create 时粘贴
+      #   - Neon: project → Connection string → 选 "Pooled connection"
+      #   - 已有 Render 库: 数据库页 → Connections → Internal Database URL
       - key: DATABASE_URL
-        fromDatabase:
-          name: xixi-club-db
-          property: connectionString
-      # 访问口令：部署时在 Render 里手填（不要写进代码库）
+        sync: false
+      # 访问口令：自己定，打开网站时要输
       - key: ACCESS_CODE
         sync: false
-      # 会话签名密钥：Render 自动生成随机值
+      # 会话签名密钥：Render 自动生成随机值，不用管
       - key: SESSION_SECRET
         generateValue: true
 
-databases:
-  - name: xixi-club-db
-    databaseName: xixi_club
-    user: xixi
-    plan: free
-    region: singapore
+# databases:
+#   - name: xixi-club-db
+#     databaseName: xixi_club
+#     user: xixi
+#     plan: free
+#     region: singapore

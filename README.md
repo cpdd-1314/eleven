@@ -28,41 +28,88 @@
 
 ## 一、部署到 Render（推荐，可一键完成）
 
+### 先搞清楚：数据库从哪来
+
+`render.yaml` **不会**创建数据库，而是要求你提供一个 `DATABASE_URL`。这么做是因为：
+
+> **Render 免费套餐每个 workspace 只允许 1 个免费 PostgreSQL。**
+> 如果账号里已经有一个（别的项目在用），再点 Blueprint 会报
+> `cannot have more than one active free tier database`，
+> 数据库建不出来，Web Service 也会被连带取消（`canceled: another action failed`）。
+
+所以数据库按下面三选一，拿到连接串后填进 `DATABASE_URL` 即可：
+
+| 方案 | 成本 | 说明 |
+| --- | --- | --- |
+| **Neon**（推荐） | 免费永久 | 免费档无到期限制，0.5 GB 足够存几万条订单。GitHub 登录即可，不用信用卡 |
+| Render 付费 Postgres | 约 $6/月 | 最省心，和 Web Service 同区域内网直连 |
+| 复用已有的免费 Render 库 | 免费 | 零注册，但**创建满 30 天就会被删**，且可能与旧项目的表名冲突 |
+
+#### 用 Neon（推荐步骤）
+
+1. 打开 https://neon.tech ，用 GitHub 账号登录。
+2. 新建一个 Project，区域选 **Singapore**（离 Render 的 singapore 区近）。
+3. 进 Project → **Connection string** → 复制 **Pooled connection** 那一条。
+   形如：`postgresql://user:pass@ep-xxx-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require`
+4. 这条串待会粘贴到 Render 的 `DATABASE_URL`。
+
+> 代码已自动识别：连接串含 `.internal` 或指向 localhost 时不启用 SSL，其余一律
+> `sslmode=require`，所以 Neon / Render 外部串都能直接连，不用改代码。
+
 ### 方式 A：Blueprint 一键部署（推荐）
 
 1. 把本仓库推送到 GitHub（见下方第二节）。
 2. 打开 Render Dashboard → **New** → **Blueprint**。
-3. 选择本仓库，Render 会读取根目录的 `render.yaml`。
-4. 在参数页把 `ACCESS_CODE` 填成你想要的访问口令（例如 `xixi2026`）。
+3. 选择本仓库，Render 会读取根目录的 `render.yaml`，规划出 1 个 Web Service。
+4. 在参数页填两个值：
+   - `DATABASE_URL` → 上面拿到的连接串
+   - `ACCESS_CODE` → 你想要的访问口令（例如 `xixi2026`）
 5. 点 **Apply**，等待 3～5 分钟。
 
-完成后访问 Render 给你的 `https://xixi-club-xxxx.onrender.com`，输入口令即可使用。
-`render.yaml` 会自动创建 Web Service 和 PostgreSQL，并把连接串注入为 `DATABASE_URL`。
+完成后访问 Render 给你的 `https://xxx.onrender.com`，输入口令即可使用。
 
-Blueprint 深链（把仓库地址换成你自己的）：
+如果 Blueprint 之前已经建过并且失败了，进 Blueprint 详情页点右上角 **Manual sync**
+重新拉取 `render.yaml` 并重试即可。
+
+Blueprint 深链：
 
 ```
-https://dashboard.render.com/blueprint/new?repo=https://github.com/cpdd-1314/十一愿俱乐部
+https://dashboard.render.com/blueprint/new?repo=https://github.com/cpdd-1314/eleven
 ```
 
-### 方式 B：手动创建
+### 方式 B：手动创建（Blueprint 出问题时用这个）
 
-1. Render → **New** → **Postgres**：名称随意，Plan 选 `Free`，区域记住（建议 Singapore）。
-2. Render → **New** → **Web Service**，连接本仓库：
+1. Render → **New** → **Web Service**，连接本仓库：
    - Runtime：`Node`
    - Build Command：`npm install --omit=dev`
    - Start Command：`node server/index.js`
    - Health Check Path：`/healthz`
-3. 在 **Environment** 里添加：
+   - Instance Type：`Free`
+   - Region：`Singapore`
+2. 在 **Environment** 里添加：
    | Key | Value |
    | --- | --- |
-   | `DATABASE_URL` | 选 Postgres 实例的 **Internal Connection String** |
+   | `DATABASE_URL` | Neon 的 Pooled connection string（或 Render 已有的 Internal Database URL） |
    | `ACCESS_CODE` | 你的访问口令 |
    | `SESSION_SECRET` | 一串长随机字符串 |
    | `NODE_VERSION` | `22` |
-4. 保存并部署。
+3. 保存并部署。
 
 > 数据表会在服务首次启动时自动创建，无需手动执行 SQL。
+> 用的是同一套 `render.yaml` 里的参数，效果完全一样。
+
+### 复用已有的免费 Render 数据库
+
+如果不想注册 Neon，也可以直接用账号里那个已有的免费库：
+
+1. Render Dashboard → 打开那个 **Postgres** 实例 → **Connections** → 复制 **Internal Database URL**。
+2. 把它填进 Web Service 的 `DATABASE_URL`。
+
+两个需要留意的地方：
+
+- 该库仍然会在**创建满 30 天后被删除**（有 14 天宽限期），这是免费档的硬限制。
+- 本应用会建 `staff`、`orders`、`sync_meta` 三张表。如果旧项目里已经有同名的 `orders` 表，
+  两边会互相干扰 —— 这种情况下建议改用 Neon。
 
 ---
 
@@ -159,6 +206,7 @@ docker run -d --name xixi-pg -p 5432:5432 \
 
 | 项目 | 免费额度 | 后果 |
 | --- | --- | --- |
+| **免费数据库数量** | **每个 workspace 只能有 1 个** | 已有免费库时，Blueprint 建第二个会报 `cannot have more than one active free tier database`，Web Service 被连带取消 |
 | **PostgreSQL** | 1 GB 存储，**创建 30 天后过期** | 过期后数据会被删除（有 14 天宽限期供你升级）。**这是最大的坑** |
 | **Web Service** | 512 MB 内存 / 0.1 CPU，**闲置 15 分钟休眠** | 下次访问首次打开要等 30～60 秒冷启动 |
 | 实例时长 | 每月 750 小时 / 工作区 | 一个常驻服务够用，多个会超 |
