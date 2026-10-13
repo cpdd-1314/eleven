@@ -109,8 +109,27 @@ function isHttps(req) {
   )
 }
 
+/**
+ * 生产环境没配 ACCESS_CODE 时的保护状态。
+ *
+ * 如果放任不管，/api/login 会给任何访客签发会话，等于把工资数据完全公开。
+ * 所以生产环境下宁可拒绝服务，也不能静默放行。
+ */
+function isMisconfigured() {
+  return !accessCode() && process.env.NODE_ENV === 'production'
+}
+
 /** Express 中间件：要求已登录 */
 function requireAuth(req, res, next) {
+  if (isMisconfigured()) {
+    return res.status(503).json({
+      error: 'NO_ACCESS_CODE',
+      message:
+        '服务端未配置 ACCESS_CODE，为防止工资数据被公开访问，已拒绝请求。' +
+        '请在 Render 的 Environment 里添加 ACCESS_CODE 后重新部署。'
+    })
+  }
+
   if (isAuthed(req)) return next()
   res.status(401).json({ error: 'UNAUTHORIZED', message: '请先输入访问口令' })
 }
@@ -121,6 +140,7 @@ module.exports = {
   issueToken,
   verifyToken,
   isAuthed,
+  isMisconfigured,
   setSessionCookie,
   clearSessionCookie,
   requireAuth

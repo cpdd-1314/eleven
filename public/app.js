@@ -239,13 +239,27 @@
         showApp()
         await refresh(true)
         openStream()
-      } else {
-        showLogin()
-        if (info.demo) {
-          const err = $('#login-error')
-          err.textContent = '服务端未设置 ACCESS_CODE，直接点击「进入系统」即可。'
-          err.hidden = false
-        }
+        return
+      }
+
+      showLogin()
+
+      if (info.misconfigured) {
+        const err = $('#login-error')
+        err.textContent =
+          '服务端没有配置 ACCESS_CODE 环境变量。为防止工资数据被公开访问，' +
+          '系统已拒绝所有数据请求。请在 Render 控制台的 Environment 里添加 ' +
+          'ACCESS_CODE 并重新部署。'
+        err.hidden = false
+        $('#login-submit').disabled = true
+        $('#login-code').disabled = true
+        return
+      }
+
+      if (info.demo) {
+        const err = $('#login-error')
+        err.textContent = '服务端未设置 ACCESS_CODE，直接点击「进入系统」即可。'
+        err.hidden = false
       }
     } catch (e) {
       showLogin()

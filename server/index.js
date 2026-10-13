@@ -95,19 +95,48 @@ async function notifyChange() {
  * 认证相关
  * ------------------------------------------------------------------ */
 
+/**
+ * 存活探针 —— Render 的健康检查指向这里。
+ *
+ * 只要 HTTP 服务还在跑就返回 200。数据库不通只作为信息返回，不让它拉低状态码：
+ * 否则数据库一时连不上，Render 会判定健康检查失败，把部署挂 15 分钟然后 Timed Out，
+ * 服务也跟着被回滚。数据库状态请用 /readyz 判断。
+ */
 app.get('/healthz', async (req, res) => {
+  let db = 'ok'
+
   try {
     await pool.query('SELECT 1')
-    res.json({ ok: true })
   } catch (e) {
-    res.status(503).json({ ok: false, error: e.message })
+    db = 'down'
+  }
+
+  res.set('Cache-Control', 'no-store')
+  res.json({
+    ok: true,
+    db,
+    accessCodeConfigured: Boolean(process.env.ACCESS_CODE)
+  })
+})
+
+/** 就绪探针 —— 数据库不通返回 503，供人工排查用（Render 健康检查没指向它） */
+app.get('/readyz', async (req, res) => {
+  try {
+    await pool.query('SELECT 1')
+    res.json({ ready: true })
+  } catch (e) {
+    res.status(503).json({ ready: false, error: e.message })
   }
 })
 
 app.get('/api/session', (req, res) => {
+  const misconfigured = auth.isMisconfigured()
+
+  res.set('Cache-Control', 'no-store')
   res.json({
-    authed: auth.isAuthed(req),
-    demo: !process.env.ACCESS_CODE
+    authed: !misconfigured && auth.isAuthed(req),
+    demo: !process.env.ACCESS_CODE && !misconfigured,
+    misconfigured
   })
 })
 
@@ -473,20 +502,32 @@ app.get('*', (req, res) => {
  * ------------------------------------------------------------------ */
 
 async function start() {
-  try {
-    await ensureSchema()
-    console.log('[db] 数据表已就绪')
-  } catch (e) {
-    console.error('[db] 初始化失败：', e.message)
-    console.error('     服务仍会启动，但数据库相关接口会返回 500，请检查 DATABASE_URL。')
+  if (!process.env.DATABASE_URL) {
+    console.error('[db] ✗ 缺少环境变量 DATABASE_URL')
+    console.error('     环境变量 → Environment → Add Environment Variable，粘贴 Postgres 连接串后 Save。')
+    console.error('     Neon 示例：postgresql://user:pass@ep-xxx-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require')
+  } else {
+    try {
+      await ensureSchema()
+      console.log('[db] ✓ 数据表已就绪')
+    } catch (e) {
+      console.error('[db] ✗ 初始化失败：', e.message)
+      console.error('     请检查 DATABASE_URL 是否正确、数据库实例是否可用、IP/网络是否放通。')
+    }
   }
 
-  if (!process.env.ACCESS_CODE) {
-    console.warn('[auth] 未设置 ACCESS_CODE，网站将不校验口令，任何人都能访问数据！')
+  if (auth.isMisconfigured()) {
+    console.error('[auth] ✗ 生产环境未设置 ACCESS_CODE，已开启保护：所有数据接口返回 503。')
+    console.error('     请在 Environment 里添加 ACCESS_CODE，否则网站无法使用。')
+  } else if (!process.env.ACCESS_CODE) {
+    console.warn('[auth] ⚠ 未设置 ACCESS_CODE（非生产环境），网站不校验口令。')
+  } else {
+    console.log('[auth] ✓ 访问口令已启用')
   }
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[server] 十一愿俱乐部已启动，端口 ${PORT}`)
+    console.log(`[server] 自检：http://localhost:${PORT}/healthz`)
   })
 }
 

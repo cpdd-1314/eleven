@@ -98,6 +98,25 @@ https://dashboard.render.com/blueprint/new?repo=https://github.com/cpdd-1314/ele
 > 数据表会在服务首次启动时自动创建，无需手动执行 SQL。
 > 用的是同一套 `render.yaml` 里的参数，效果完全一样。
 
+### 部署后自检 / 常见问题
+
+部署完先打开 `https://你的地址/healthz`，对照返回的 JSON 判断状态：
+
+```json
+{ "ok": true, "db": "ok", "accessCodeConfigured": true }
+```
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| `"db": "down"` | `DATABASE_URL` 没填或填错 | Environment 里补上正确的连接串，Save 后会自动重新部署 |
+| `"accessCodeConfigured": false` | `ACCESS_CODE` 没填 | 生产环境会**保护性拒绝所有数据请求**（返回 503），页面会提示你去配置。补上即可恢复 |
+| 日志出现 `Timed Out` | 健康检查连续失败 | 我们的 `/healthz` 已改为只要进程活着就返回 200，数据库问题不会再拖挂部署 |
+| 服务能开但数据加载失败 | 数据库连不上 | 访问 `/readyz` 看具体报错，通常是连接串写错或 Neon 项目被暂停 |
+
+> 环境变量**不会**在 Blueprint 同步时自动补齐。如果创建时没弹表单，就到
+> **Web Service → Environment → Add Environment Variable** 手动加，
+> 保存后 Render 会自动触发一次新部署。
+
 ### 复用已有的免费 Render 数据库
 
 如果不想注册 Neon，也可以直接用账号里那个已有的免费库：
@@ -179,7 +198,8 @@ docker run -d --name xixi-pg -p 5432:5432 \
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/healthz` | 健康检查（含数据库连通性） |
+| `GET` | `/healthz` | 存活探针，**只要服务在跑就返回 200**；body 里带数据库状态与口令配置状态。Render 健康检查指向它 |
+| `GET` | `/readyz` | 就绪探针，数据库不通返回 503。排查问题时看这个 |
 | `GET` | `/api/session` | 查询当前登录状态 |
 | `POST` | `/api/login` | `{ code }` 登录 |
 | `POST` | `/api/logout` | 退出登录 |
